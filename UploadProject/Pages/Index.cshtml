@@ -22,11 +22,11 @@
                     <tr>
                         <td>@f.OriginalName</td>
                         <td>
-                            <a class="btn btn-sm btn-primary" asp-page-handler="download" asp-route-filename="@f.OriginalName">Download</a>
+                            <a class="btn btn-sm btn-primary" asp-page-handler="File" asp-route-id="@f.Id">Download</a>
                         </td>
                         <td>@if (f.ContentType.StartsWith("image/"))
                             {
-                                <img src="/Index?handler=Image&id=@f.Id" alt="@f.OriginalName" style="height: 100px" />
+                                <img src="/Index?handler=File&id=@f.Id" alt="@f.OriginalName" style="height: 100px" />
                             }
                             else
 							{

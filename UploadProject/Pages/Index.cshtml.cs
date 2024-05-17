@@ -31,9 +31,9 @@ namespace UploadProject.Pages
             Files = await _context.UploadedFiles.ToListAsync();
         }
 
-        public IActionResult OnGetDownload(string filename)
+        public IActionResult OnGetFile(Guid id)
         {
-            var file = _context.UploadedFiles.FirstOrDefault(f => f.OriginalName == filename);
+            var file = _context.UploadedFiles.FirstOrDefault(f => f.Id == id);
             if (file != null)
             {
                 return File(file.Blob, file.ContentType, file.OriginalName);
@@ -41,19 +41,6 @@ namespace UploadProject.Pages
             else
             {
                 ErrorMessage = "File not found";
-                return RedirectToPage();
-            }
-        }
-        public IActionResult OnGetImage(Guid id)
-        {
-            var file = _context.UploadedFiles.FirstOrDefault(f => f.Id == id);
-            if (file != null)
-            {
-                return File(file.Blob, file.ContentType);
-            }
-            else
-            {
-                ErrorMessage = "Image not found";
                 return RedirectToPage();
             }
         }
