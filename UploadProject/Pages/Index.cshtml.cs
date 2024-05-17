@@ -44,5 +44,18 @@ namespace UploadProject.Pages
                 return RedirectToPage();
             }
         }
+        public IActionResult OnGetImage(Guid id)
+        {
+            var file = _context.UploadedFiles.FirstOrDefault(f => f.Id == id);
+            if (file != null)
+            {
+                return File(file.Blob, file.ContentType);
+            }
+            else
+            {
+                ErrorMessage = "Image not found";
+                return RedirectToPage();
+            }
+        }
     }
 }

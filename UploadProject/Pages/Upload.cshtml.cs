@@ -4,12 +4,18 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using UploadProject.Data;
 using UploadProject.Models;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Gif;
+using SixLabors.ImageSharp.Formats;
 
 namespace UploadProject.Pages
 {
     public class UploadModel : PageModel
     {
-        private IWebHostEnvironment _environment;
+        private readonly IWebHostEnvironment _environment;
         private readonly ApplicationDbContext _context;
 
         [TempData]
@@ -17,6 +23,7 @@ namespace UploadProject.Pages
         [TempData]
         public string ErrorMessage { get; set; }
 
+        [BindProperty]
         public ICollection<IFormFile> Upload { get; set; }
 
         public UploadModel(IWebHostEnvironment environment, ApplicationDbContext context)
@@ -31,29 +38,62 @@ namespace UploadProject.Pages
 
         public async Task<IActionResult> OnPostAsync()
         {
-            var userId = User.Claims.Where(c => c.Type == ClaimTypes.NameIdentifier).FirstOrDefault().Value;
+            var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
             int successfulProcessing = 0;
             int failedProcessing = 0;
-            
+
             foreach (var uploadedFile in Upload)
             {
-                var file = new UploadedFile
-                {
-                    OriginalName = uploadedFile.FileName,
-                    UploaderId = userId,
-                    UploadedAt = DateTime.Now,
-                    ContentType = uploadedFile.ContentType,
-                    Blob = new byte[uploadedFile.Length]
-                };
                 try
                 {
                     using (var memoryStream = new MemoryStream())
                     {
                         await uploadedFile.CopyToAsync(memoryStream);
-                        file.Blob = memoryStream.ToArray();
-                    }
+                        var fileBytes = memoryStream.ToArray();
 
-                    _context.UploadedFiles.Add(file);
+                        if (uploadedFile.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                        {
+                            using (var image = Image.Load(fileBytes))
+                            {
+                                var maxPixels = 2_000_000;
+                                var originalWidth = image.Width;
+                                var originalHeight = image.Height;
+                                var originalPixels = originalWidth * originalHeight;
+                                if (originalPixels > maxPixels)
+                                {
+                                    var ratio = Math.Sqrt((double)maxPixels / originalPixels);
+                                    var newWidth = (int)(originalWidth * ratio);
+                                    var newHeight = (int)(originalHeight * ratio);
+
+                                    image.Mutate(x => x.Resize(newWidth, newHeight));
+                                }
+
+                                using (var outputStream = new MemoryStream())
+                                {
+                                    var extension = Path.GetExtension(uploadedFile.FileName).ToLower();
+                                    IImageEncoder encoder = extension switch
+                                    {
+                                        ".png" => new PngEncoder(),
+                                        ".gif" => new GifEncoder(),
+                                        _ => new JpegEncoder(),
+                                    };
+
+                                    image.Save(outputStream, encoder);
+                                    fileBytes = outputStream.ToArray();
+                                }
+                            }
+                        }
+
+                        var file = new UploadedFile
+                        {
+                            OriginalName = uploadedFile.FileName,
+                            UploaderId = userId,
+                            UploadedAt = DateTime.Now,
+                            ContentType = uploadedFile.ContentType,
+                            Blob = fileBytes
+                        };
+                        _context.UploadedFiles.Add(file);
+                    }
 
                     await _context.SaveChangesAsync();
                     successfulProcessing++;
@@ -62,16 +102,19 @@ namespace UploadProject.Pages
                 {
                     failedProcessing++;
                 }
-                if (failedProcessing == 0)
-                {
-                    SuccessMessage = "All files has been uploaded successfuly.";
-                }
-                else
-                {
-                    ErrorMessage = "There were " + failedProcessing + " errors during uploading and processing of files.";
-                }
             }
+
+            if (failedProcessing == 0)
+            {
+                SuccessMessage = "All files have been uploaded successfully.";
+            }
+            else
+            {
+                ErrorMessage = $"There were {failedProcessing} errors during the uploading and processing of files.";
+            }
+
             return RedirectToPage("/Index");
         }
     }
+
 }
